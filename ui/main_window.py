@@ -413,16 +413,43 @@ class MainWindow(QMainWindow):
         self._render_worker.start()
 
     def _on_render_done(self, audio):
-        self.audio = audio
-        self.player.set_audio(audio, SAMPLE_RATE)
+        try:
+            audio = np.asarray(audio, dtype=np.float32)
+
+            if audio.size == 0:
+                raise ValueError("Renderer returned empty audio")
+
+            if not np.all(np.isfinite(audio)):
+                raise ValueError("Renderer returned NaN or infinite audio")
+
+            self.audio = audio
+            self.player.set_audio(audio, SAMPLE_RATE)
+
+        except Exception as e:
+            self.audio = None
+            self.gen_btn.setEnabled(True)
+            self.play_btn.setEnabled(False)
+            self.export_wav_btn.setEnabled(False)
+            self.export_midi_btn.setEnabled(False)
+
+            QMessageBox.critical(
+                self,
+                "Audio error",
+                f"Failed to prepare audio:\n{e}",
+            )
+            return
+
         self.gen_btn.setEnabled(True)
         self.play_btn.setEnabled(True)
         self.export_wav_btn.setEnabled(True)
         self.export_midi_btn.setEnabled(True)
+
+        duration = len(audio) / SAMPLE_RATE
+
         self.statusBar().showMessage(
             f"Ready — seed {self.pattern.seed_used}, "
             f"{len(self.pattern.events)} events, "
-            f"{len(audio) / SAMPLE_RATE:.1f}s"
+            f"{duration:.2f}s"
         )
 
     def _on_render_fail(self, msg):
