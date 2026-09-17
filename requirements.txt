@@ -1,0 +1,6 @@
+numpy
+soundfile
+mido
+python-rtmidi
+PySide6
+sounddevice
