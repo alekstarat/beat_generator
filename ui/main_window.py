@@ -23,6 +23,7 @@ from core.scanner import scan_samples, sample_summary
 from core.generator import generate_pattern
 from core.renderer import render, write_wav, write_midi, SAMPLE_RATE
 from core.preset import save_preset, load_preset
+from core.config import get_last_pack, set_last_pack, get_last_settings, set_last_settings
 
 from .sequencer import SequencerWidget
 from .audio_player import AudioPlayer
@@ -128,6 +129,8 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._connect()
+        self._sync_sequencer_length()
+        self._restore_from_config()
         self.statusBar().showMessage("Drop a sample pack to begin")
 
     # ------------------------------------------------------------------ UI
@@ -208,11 +211,11 @@ class MainWindow(QMainWindow):
         self.gen_btn = QPushButton("Generate")
         self.gen_btn.setObjectName("primary")
         self.gen_btn.setEnabled(False)
+        self.gen_btn.setToolTip(
+            "Generate a new pattern.\n"
+            "Locked tracks keep their hits on subsequent generates."
+        )
         al.addWidget(self.gen_btn)
-
-        self.regen_btn = QPushButton("Regenerate")
-        self.regen_btn.setEnabled(False)
-        al.addWidget(self.regen_btn)
 
         self.play_btn = QPushButton("▶ Play")
         self.play_btn.setEnabled(False)
@@ -282,7 +285,6 @@ class MainWindow(QMainWindow):
         self.drop_zone.folder_dropped.connect(self.load_pack)
         self.browse_btn.clicked.connect(self._browse_pack)
         self.gen_btn.clicked.connect(self.generate)
-        self.regen_btn.clicked.connect(self.regenerate)
         self.play_btn.clicked.connect(self.play)
         self.stop_btn.clicked.connect(self.stop)
         self.export_wav_btn.clicked.connect(self.export_wav)
@@ -295,6 +297,8 @@ class MainWindow(QMainWindow):
         self.sequencer.solo_changed.connect(self._on_solo)
         self.sequencer.step_toggled.connect(self._on_step_toggle)
         self.sequencer.sample_chosen.connect(self._on_sample_chosen)
+        self.sequencer.preview_track.connect(self._preview_track)
+        self.sequencer.preview_step.connect(self._preview_step)
 
         self.grid_combo.currentIndexChanged.connect(self._on_grid_changed)
         self.bars_spin.valueChanged.connect(self._on_bars_changed)
@@ -313,6 +317,7 @@ class MainWindow(QMainWindow):
 
         self.sample_pack_root = root
         self.pack_label.setText(str(root))
+        set_last_pack(root)
         self.progress.setVisible(True)
         self.progress.setValue(0)
         self.statusBar().showMessage(f"Scanning {root}…")
@@ -375,27 +380,25 @@ class MainWindow(QMainWindow):
         )
 
     def generate(self):
+        """
+        Single Generate button:
+        - first press → full new pattern
+        - later presses → new seed, locked tracks keep their hits
+        """
         self.settings = self._read_settings()
-        # Fresh generate: clear previous so locks don't carry stale data
-        # unless user explicitly locked after a previous generate.
-        self.pattern = generate_pattern(self.settings, self.track_states, previous=None)
-        self.seed_edit.setText(str(self.pattern.seed_used))
-        self.sequencer.set_pattern(self.pattern)
-        self._render_audio()
+        # Always roll a new seed on button press so each click is a fresh take
+        # (unless the user typed an explicit seed *and* this is the very first run).
+        if self.pattern is not None or not self.seed_edit.text().strip().isdigit():
+            self.settings.seed = random.randint(0, 2**31 - 1)
 
-    def regenerate(self):
-        if self.pattern is None:
-            self.generate()
-            return
-        # New seed unless user locked the seed field intentionally —
-        # for regenerate we always pick a new seed for unlocked tracks.
-        self.settings = self._read_settings()
-        self.settings.seed = random.randint(0, 2**31 - 1)
         self.pattern = generate_pattern(
-            self.settings, self.track_states, previous=self.pattern
+            self.settings,
+            self.track_states,
+            previous=self.pattern,  # locked tracks preserved when present
         )
         self.seed_edit.setText(str(self.pattern.seed_used))
         self.sequencer.set_pattern(self.pattern)
+        self._persist_settings()
         self._render_audio()
 
     def _render_audio(self):
@@ -403,7 +406,6 @@ class MainWindow(QMainWindow):
             return
         self.statusBar().showMessage("Rendering…")
         self.gen_btn.setEnabled(False)
-        self.regen_btn.setEnabled(False)
 
         self._render_worker = RenderWorker(self.pattern, self.samples, self.track_states)
         self._render_worker.finished_ok.connect(self._on_render_done)
@@ -414,7 +416,6 @@ class MainWindow(QMainWindow):
         self.audio = audio
         self.player.set_audio(audio, SAMPLE_RATE)
         self.gen_btn.setEnabled(True)
-        self.regen_btn.setEnabled(True)
         self.play_btn.setEnabled(True)
         self.export_wav_btn.setEnabled(True)
         self.export_midi_btn.setEnabled(True)
@@ -426,7 +427,6 @@ class MainWindow(QMainWindow):
 
     def _on_render_fail(self, msg):
         self.gen_btn.setEnabled(True)
-        self.regen_btn.setEnabled(True)
         QMessageBox.critical(self, "Render failed", msg)
 
     # ------------------------------------------------------------------ Play
@@ -516,7 +516,7 @@ class MainWindow(QMainWindow):
 
         self.track_states = data["track_states"]
         self.sequencer.set_track_states(self.track_states)
-        self.sequencer.set_steps(s.steps_per_bar)
+        self.sequencer.set_length(s.bars, s.steps_per_bar)
 
         root = data["sample_pack_root"]
         if root and root.is_dir():
@@ -563,13 +563,114 @@ class MainWindow(QMainWindow):
         self.sequencer.set_pattern(self.pattern)
         self._render_audio()
 
-    def _on_grid_changed(self, _idx):
-        steps = self.grid_combo.currentData()
-        self.sequencer.set_steps(steps)
+    # ------------------------------------------------------------------ Preview
+    def _pick_preview_sample(self, kind: SampleType) -> Optional[Sample]:
+        """Resolve which Sample object to preview for a track."""
+        choices = self.samples.get(kind, [])
+        if not choices:
+            return None
+        forced = self.track_states[kind].forced_sample
+        if forced is not None:
+            for s in choices:
+                if s.path == forced:
+                    return s
+        # Auto: first available
+        return choices[0]
 
-    def _on_bars_changed(self, bars):
-        # Only affects next generate; sequencer shows current pattern length
-        pass
+    def _preview_track(self, kind: SampleType) -> None:
+        sample = self._pick_preview_sample(kind)
+        if sample is None:
+            self.statusBar().showMessage(f"No samples for {kind.value}")
+            return
+        self._play_sample_preview(sample)
+
+    def _preview_step(self, step: int, kind: SampleType) -> None:
+        """Right-click on a cell: preview the sample that would play there."""
+        sample = self._pick_preview_sample(kind)
+        if sample is None:
+            self.statusBar().showMessage(f"No samples for {kind.value}")
+            return
+        self._play_sample_preview(sample)
+        self.statusBar().showMessage(
+            f"Preview {kind.value} @ step {step}: {sample.path.name}"
+        )
+
+    def _play_sample_preview(self, sample: Sample) -> None:
+        from core.renderer import resample, SAMPLE_RATE
+        audio = resample(sample.audio, sample.sample_rate, SAMPLE_RATE)
+        # Soft pad so very short one-shots are audible
+        if len(audio) < SAMPLE_RATE // 20:
+            pad = np.zeros(SAMPLE_RATE // 20, dtype=np.float32)
+            pad[: len(audio)] = audio
+            audio = pad
+        self.player.play_oneshot(audio, SAMPLE_RATE)
+        self.statusBar().showMessage(f"▶ {sample.path.name}")
+
+    def _on_grid_changed(self, _idx):
+        self._sync_sequencer_length()
+
+    def _on_bars_changed(self, _bars):
+        self._sync_sequencer_length()
+
+    def _sync_sequencer_length(self) -> None:
+        bars = self.bars_spin.value()
+        spb = self.grid_combo.currentData() or 16
+        self.sequencer.set_length(bars, spb)
+
+    # ------------------------------------------------------------------ Config
+    def _restore_from_config(self) -> None:
+        """Restore last settings + auto-load last sample pack."""
+        cfg = get_last_settings()
+        if cfg:
+            try:
+                if "bpm" in cfg:
+                    self.bpm_spin.setValue(int(cfg["bpm"]))
+                if "density" in cfg:
+                    self.density_slider.slider.setValue(int(float(cfg["density"]) * 100))
+                if "complexity" in cfg:
+                    self.complexity_slider.slider.setValue(int(float(cfg["complexity"]) * 100))
+                if "swing" in cfg:
+                    self.swing_slider.slider.setValue(int(float(cfg["swing"]) * 100))
+                if "humanize" in cfg:
+                    self.humanize_slider.slider.setValue(int(float(cfg["humanize"]) * 100))
+                if "bars" in cfg:
+                    self.bars_spin.setValue(int(cfg["bars"]))
+                if "steps_per_bar" in cfg:
+                    idx = self.grid_combo.findData(int(cfg["steps_per_bar"]))
+                    if idx >= 0:
+                        self.grid_combo.setCurrentIndex(idx)
+            except Exception:
+                pass
+
+        last = get_last_pack()
+        if last is not None:
+            self.statusBar().showMessage(f"Restoring pack: {last}")
+            # Defer so the window is fully shown first
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(100, lambda: self.load_pack(str(last)))
+
+    def _persist_settings(self) -> None:
+        s = self._read_settings()
+        set_last_settings({
+            "bpm": s.bpm,
+            "density": s.density,
+            "complexity": s.complexity,
+            "swing": s.swing,
+            "humanize": s.humanize,
+            "bars": s.bars,
+            "steps_per_bar": s.steps_per_bar,
+        })
+
+    def closeEvent(self, event) -> None:
+        try:
+            self.player.stop()
+            self.player.stop_oneshot()
+            self._persist_settings()
+            if self.sample_pack_root:
+                set_last_pack(self.sample_pack_root)
+        except Exception:
+            pass
+        super().closeEvent(event)
 
 
 APP_STYLE = """
