@@ -93,7 +93,8 @@ class Settings:
 class TrackState:
     """Per-track UI/engine state that survives regenerate."""
     locked: bool = False
-    forced_sample: Optional[Path] = None   # if set, always use this sample
+    forced_sample: Optional[Path] = None   # selected sample, if set
+    sample_locked: bool = False            # keep selected sample during random sample selection
     muted: bool = False
     solo: bool = False
 

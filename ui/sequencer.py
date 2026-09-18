@@ -100,6 +100,7 @@ class TrackRow(QWidget):
     solo_changed = Signal(object, bool)
     step_toggled = Signal(int, object)
     sample_chosen = Signal(object, object)
+    sample_lock_changed = Signal(object, bool)
     preview_track = Signal(object)
     preview_step = Signal(int, object)
 
@@ -153,6 +154,13 @@ class TrackRow(QWidget):
         self.sample_combo.setToolTip("Force a specific sample (or Auto)")
         self.sample_combo.currentIndexChanged.connect(self._on_sample)
         layout.addWidget(self.sample_combo)
+
+        self.sample_lock_btn = QPushButton("🔓")
+        self.sample_lock_btn.setFixedSize(28, 26)
+        self.sample_lock_btn.setCheckable(True)
+        self.sample_lock_btn.setToolTip("Lock selected sample (keep it when randomizing samples)")
+        self.sample_lock_btn.toggled.connect(self._on_sample_lock)
+        layout.addWidget(self.sample_lock_btn)
 
         self.preview_btn = QPushButton("▶")
         self.preview_btn.setFixedSize(28, 26)
@@ -218,6 +226,19 @@ class TrackRow(QWidget):
             self.sample_combo.addItem(name, path)
         self._updating_combo = False
 
+    def set_selected_sample(self, path) -> None:
+        """Select a sample path without emitting sample_chosen."""
+        self._updating_combo = True
+        try:
+            if path is None:
+                self.sample_combo.setCurrentIndex(0 if self.sample_combo.count() else -1)
+            else:
+                idx = self.sample_combo.findData(path)
+                if idx >= 0:
+                    self.sample_combo.setCurrentIndex(idx)
+        finally:
+            self._updating_combo = False
+
     def set_track_state(self, st: TrackState) -> None:
         self.lock_btn.blockSignals(True)
         self.lock_btn.setChecked(st.locked)
@@ -232,6 +253,11 @@ class TrackRow(QWidget):
         self.solo_btn.setChecked(st.solo)
         self.solo_btn.blockSignals(False)
 
+        self.sample_lock_btn.blockSignals(True)
+        self.sample_lock_btn.setChecked(getattr(st, "sample_locked", False))
+        self.sample_lock_btn.setText("🔒" if getattr(st, "sample_locked", False) else "🔓")
+        self.sample_lock_btn.blockSignals(False)
+
         if st.forced_sample is not None:
             idx = self.sample_combo.findData(st.forced_sample)
             if idx >= 0:
@@ -245,6 +271,10 @@ class TrackRow(QWidget):
 
     def current_sample_path(self):
         return self.sample_combo.currentData()
+
+    def _on_sample_lock(self, locked: bool) -> None:
+        self.sample_lock_btn.setText("🔒" if locked else "🔓")
+        self.sample_lock_changed.emit(self.kind, locked)
 
     def _on_sample(self, _idx: int) -> None:
         if self._updating_combo:
@@ -311,6 +341,7 @@ class SequencerWidget(QWidget):
     solo_changed = Signal(object, bool)
     step_toggled = Signal(int, object)
     sample_chosen = Signal(object, object)
+    sample_lock_changed = Signal(object, bool)
     preview_track = Signal(object)
     preview_step = Signal(int, object)
 
@@ -357,6 +388,7 @@ class SequencerWidget(QWidget):
             row.solo_changed.connect(self.solo_changed)
             row.step_toggled.connect(self.step_toggled)
             row.sample_chosen.connect(self.sample_chosen)
+            row.sample_lock_changed.connect(self.sample_lock_changed)
             row.preview_track.connect(self.preview_track)
             row.preview_step.connect(self.preview_step)
             self.rows[kind] = row
@@ -405,6 +437,19 @@ class SequencerWidget(QWidget):
 
     def set_samples_for(self, kind: SampleType, names: list[tuple[str, object]]) -> None:
         self.rows[kind].set_samples(names)
+
+    def set_selected_sample(self, kind: SampleType, path) -> None:
+        if kind in self.rows:
+            self.rows[kind].set_selected_sample(path)
+
+    def set_sample_locked(self, kind: SampleType, locked: bool) -> None:
+        if kind not in self.rows:
+            return
+        row = self.rows[kind]
+        row.sample_lock_btn.blockSignals(True)
+        row.sample_lock_btn.setChecked(locked)
+        row.sample_lock_btn.setText("🔒" if locked else "🔓")
+        row.sample_lock_btn.blockSignals(False)
 
     def set_track_states(self, states: dict[SampleType, TrackState]) -> None:
         for kind, st in states.items():

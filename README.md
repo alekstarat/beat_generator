@@ -9,6 +9,8 @@
 - 16- и 32-step sequencer с визуальной сеткой
 - Generate / Regenerate
 - **Lock** отдельных дорожек (при regenerate locked-треки сохраняются)
+- **Lock** выбранного sample на каждой дорожке
+- **Random Samples** — случайный выбор sample для всех дорожек; locked sample не меняется
 - Mute / Solo
 - Параметры: BPM, Density, Complexity, Swing, Humanize, Bars, Seed
 - Выбор конкретного sample на дорожку (или Auto)
@@ -92,3 +94,39 @@ JSON содержит:
 2. Портировать типы и `generate_pattern` / `render` в C++.
 3. JUCE AudioProcessor + custom editor вместо PySide6.
 4. Seed + lock semantics уже совпадают — результаты будут идентичны.
+
+
+## Сборка Windows EXE
+
+На Windows с установленным Python 3.13 запусти:
+
+```bat
+build_exe.bat
+```
+
+Скрипт автоматически:
+1. создаст `.venv`;
+2. установит зависимости;
+3. установит PyInstaller;
+4. соберёт приложение с `icon.ico`;
+5. создаст portable-папку `dist\BeatGenerator\`.
+
+Главный файл:
+
+```text
+dist\BeatGenerator\BeatGenerator.exe
+```
+
+Для переноса на другой Windows-ПК копируй **всю папку `dist\BeatGenerator`**, а не только `.exe`.
+## Windows EXE build
+
+On Windows run `build_exe.bat`. The script creates `.venv`, installs dependencies including Pillow and PyInstaller, and builds a portable application in `dist\BeatGenerator\BeatGenerator.exe`.
+
+The project icon is a real multi-size Windows `.ico`.
+
+### Sample locks
+
+Each track has a sample lock button next to the sample selector. A locked sample is preserved by **Random Samples**. If a track has no concrete sample selected when locking, one is selected automatically.
+
+**Random Samples** assigns a different random concrete sample to every unlocked track.
+

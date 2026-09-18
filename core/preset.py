@@ -47,6 +47,7 @@ def _tracks_to_dict(tracks: dict[SampleType, TrackState]) -> dict[str, Any]:
             "locked": st.locked,
             "muted": st.muted,
             "solo": st.solo,
+            "sample_locked": st.sample_locked,
             "forced_sample": str(st.forced_sample) if st.forced_sample else None,
         }
     return out
@@ -63,6 +64,7 @@ def _tracks_from_dict(d: dict[str, Any]) -> dict[SampleType, TrackState]:
             locked=bool(val.get("locked", False)),
             muted=bool(val.get("muted", False)),
             solo=bool(val.get("solo", False)),
+            sample_locked=bool(val.get("sample_locked", False)),
             forced_sample=Path(val["forced_sample"]) if val.get("forced_sample") else None,
         )
     return result

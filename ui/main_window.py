@@ -217,6 +217,14 @@ class MainWindow(QMainWindow):
         )
         al.addWidget(self.gen_btn)
 
+        self.random_samples_btn = QPushButton("🎲 Random Samples")
+        self.random_samples_btn.setEnabled(False)
+        self.random_samples_btn.setToolTip(
+            "Choose a random sample for every track. "
+            "Locked sample selections are preserved."
+        )
+        al.addWidget(self.random_samples_btn)
+
         self.play_btn = QPushButton("▶ Play")
         self.play_btn.setEnabled(False)
         al.addWidget(self.play_btn)
@@ -285,6 +293,7 @@ class MainWindow(QMainWindow):
         self.drop_zone.folder_dropped.connect(self.load_pack)
         self.browse_btn.clicked.connect(self._browse_pack)
         self.gen_btn.clicked.connect(self.generate)
+        self.random_samples_btn.clicked.connect(self.randomize_samples)
         self.play_btn.clicked.connect(self.play)
         self.stop_btn.clicked.connect(self.stop)
         self.export_wav_btn.clicked.connect(self.export_wav)
@@ -297,6 +306,7 @@ class MainWindow(QMainWindow):
         self.sequencer.solo_changed.connect(self._on_solo)
         self.sequencer.step_toggled.connect(self._on_step_toggle)
         self.sequencer.sample_chosen.connect(self._on_sample_chosen)
+        self.sequencer.sample_lock_changed.connect(self._on_sample_lock)
         self.sequencer.preview_track.connect(self._preview_track)
         self.sequencer.preview_step.connect(self._preview_step)
 
@@ -343,14 +353,16 @@ class MainWindow(QMainWindow):
         total = sum(summary.values())
         self.statusBar().showMessage(f"Loaded {total} samples from {self.sample_pack_root}")
 
-        # Populate sample combos
+        # Populate sample combos and restore per-track selection/lock state.
         for kind in SampleType:
             items = [("Auto", None)]
             for s in samples.get(kind, []):
                 items.append((s.path.name, s.path))
             self.sequencer.set_samples_for(kind, items)
+        self.sequencer.set_track_states(self.track_states)
 
         self.gen_btn.setEnabled(total > 0)
+        self.random_samples_btn.setEnabled(total > 0)
         self.save_preset_btn.setEnabled(True)
 
         missing = [k.value for k in (SampleType.KICK, SampleType.SNARE, SampleType.HAT)
@@ -555,6 +567,59 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(
                 "Preset loaded (sample pack path missing — load pack manually)"
             )
+
+    # ------------------------------------------------------------------ Sample randomization
+    def randomize_samples(self) -> None:
+        """Choose a random concrete sample for every unlocked track.
+
+        A sample-locked track keeps its current selection. If a track has no
+        concrete selection yet, it is assigned one before it can be locked.
+        """
+        changed = 0
+        for kind in SampleType:
+            state = self.track_states[kind]
+            choices = self.samples.get(kind, [])
+            if not choices:
+                continue
+
+            if state.sample_locked:
+                continue
+
+            current = state.forced_sample
+            candidates = [s for s in choices if s.path != current]
+            sample = random.choice(candidates or choices)
+            state.forced_sample = sample.path
+            self.sequencer.set_selected_sample(kind, sample.path)
+            changed += 1
+
+        if changed:
+            self.statusBar().showMessage(f"Randomized {changed} sample{'s' if changed != 1 else ''}")
+            if self.pattern is not None:
+                self._render_audio()
+        else:
+            self.statusBar().showMessage("No unlocked samples to randomize")
+
+    def _on_sample_lock(self, kind, locked):
+        state = self.track_states[kind]
+
+        if locked and state.forced_sample is None:
+            choices = self.samples.get(kind, [])
+            if not choices:
+                # No sample exists for this track: revert the UI toggle.
+                self.sequencer.set_sample_locked(kind, False)
+                self.statusBar().showMessage(f"No samples available for {kind.value}")
+                return
+
+            sample = random.choice(choices)
+            state.forced_sample = sample.path
+            self.sequencer.set_selected_sample(kind, sample.path)
+
+        state.sample_locked = locked
+        self.statusBar().showMessage(
+            f"{kind.value}: sample {'locked' if locked else 'unlocked'}"
+        )
+        if self.pattern is not None:
+            self._render_audio()
 
     # ------------------------------------------------------------------ Track callbacks
     def _on_lock(self, kind, locked):

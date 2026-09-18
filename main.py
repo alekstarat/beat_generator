@@ -21,20 +21,31 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont , QIcon
 
 from ui.main_window import MainWindow
 
+def resource_path(relative_path: str) -> Path:
+    if getattr(sys, 'frozen', False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / relative_path
+
+    return Path(__file__).resolve().parent / relative_path
 
 def main():
     app = QApplication(sys.argv)
+
     app.setApplicationName("Beat Generator")
     app.setOrganizationName("BeatGen")
+
+    icon_path = resource_path("icon.ico")
+    app.setWindowIcon(QIcon(str(icon_path)))
+
     font = QFont("Segoe UI", 10)
     app.setFont(font)
 
     win = MainWindow()
     win.show()
+
     sys.exit(app.exec())
 
 
