@@ -1,132 +1,51 @@
-# Beat Generator — Desktop Prototype
+# 🎵 Beat Generator
 
-Полноценный desktop-прототип генератора битов на **Python + PySide6**.
+Desktop-приложение для генерации и редактирования битов на основе пользовательских sample packs.
 
-## Возможности
+![BeatGenerator](https://github-production-user-asset-6210df.s3.amazonaws.com/90523142/655041058-bfdd1e46-3e67-4d17-ad2f-0cc7446f8f04.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20260919%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260919T053044Z&X-Amz-Expires=300&X-Amz-Signature=83c9a4d9eca017e6197eccc01fe2926a3dca7a4dcc7a08a5a9d6c326e66853b4&X-Amz-SignedHeaders=host&response-content-type=image%2Fpng)
 
-- Drag & drop / Browse sample-pack папки
-- Автоматический сканер и классификация WAV (kick / snare / hat / open_hat / clap / perc)
-- 16- и 32-step sequencer с визуальной сеткой
-- Generate / Regenerate
-- **Lock** отдельных дорожек (при regenerate locked-треки сохраняются)
-- **Lock** выбранного sample на каждой дорожке
-- **Random Samples** — случайный выбор sample для всех дорожек; locked sample не меняется
-- Mute / Solo
-- Параметры: BPM, Density, Complexity, Swing, Humanize, Bars, Seed
-- Выбор конкретного sample на дорожку (или Auto)
-- Клик по ячейке sequencer — ручное вкл/выкл хита
-- Прослушивание (sounddevice или Qt Multimedia)
-- Export WAV (24-bit) и MIDI
-- Save / Load пресетов (JSON)
-- Seed для воспроизводимых результатов
+## ✨ Возможности
 
-## Архитектура (готово к портированию в C++/JUCE)
+* Генерация случайных drum patterns
+* 16/32-step sequencer
+* Kick, Snare, Clap, Hat, Open Hat и Perc
+* Настройка BPM, density, complexity, swing и humanize
+* Lock / mute / solo отдельных треков
+* Drag & drop sample packs
+* Прослушивание отдельных samples и готового паттерна
+* Экспорт в **WAV** и **MIDI**
+* Сохранение и загрузка пресетов в JSON
+* Seed для воспроизводимой генерации
 
-```
-beat_generator/
-  core/                 ← pure Python, zero UI deps
-    types.py            SampleType, Event, Settings, TrackState, Pattern
-    scanner.py          classify + scan_samples
-    generator.py        generate_pattern (seed, lock support)
-    renderer.py         render → numpy, write_wav, write_midi
-    preset.py           JSON save/load
-  ui/                   ← только Qt
-    main_window.py
-    sequencer.py
-    audio_player.py
-  main.py
-```
+## 🛠 Стек
 
-Логика генерации, классификации и рендера полностью изолирована от UI.
-При переносе в JUCE достаточно переписать `core/` на C++ (те же структуры данных),
-а UI — на JUCE components. Музыкальные правила и seed-детерминизм остаются.
+* Python 3
+* PySide6
+* NumPy
 
-## Быстрый старт
+## 🚀 Запуск
 
 ```bash
-cd beat_generator
-python -m venv .venv
-
-# Windows
-.venv\Scripts\activate
-# macOS / Linux
-source .venv/bin/activate
+git clone https://github.com/your-username/beat-generator.git
+cd beat-generator
 
 pip install -r requirements.txt
 python main.py
 ```
 
-### Демо-семплы (синтетика)
+После запуска выберите папку с drum samples через **Browse** или перетащите её в окно приложения.
 
-Если нет своего pack:
-
-```bash
-python generate_example_pack.py
-# затем в UI укажи папку ./samples
-```
-
-## Структура sample pack
-
-```
-samples/
-  kick/
-  snare/
-  hat/
-  open_hat/
-  clap/
-  perc/
-```
-
-Или любые WAV в одной папке — классификация по имени файла:
-`kick_01.wav`, `snare_03.wav`, `closed_hat.wav`, `open_hat.wav`, …
-
-## Пресеты
-
-JSON содержит:
-- все generation-параметры + seed
-- lock / mute / solo по дорожкам
-- forced sample paths
-- путь к sample pack (если был)
-
-## Дальнейший путь к VST3
-
-1. Оставить `core/` как reference implementation.
-2. Портировать типы и `generate_pattern` / `render` в C++.
-3. JUCE AudioProcessor + custom editor вместо PySide6.
-4. Seed + lock semantics уже совпадают — результаты будут идентичны.
-
-
-## Сборка Windows EXE
-
-На Windows с установленным Python 3.13 запусти:
-
-```bat
-build_exe.bat
-```
-
-Скрипт автоматически:
-1. создаст `.venv`;
-2. установит зависимости;
-3. установит PyInstaller;
-4. соберёт приложение с `icon.ico`;
-5. создаст portable-папку `dist\BeatGenerator\`.
-
-Главный файл:
+## 📁 Структура проекта
 
 ```text
-dist\BeatGenerator\BeatGenerator.exe
+beat-generator/
+├── core/              # Генерация, рендеринг и работа с samples
+├── ui/                # PySide6 интерфейс
+├── main.py            # Точка входа
+├── requirements.txt
+└── README.md
 ```
 
-Для переноса на другой Windows-ПК копируй **всю папку `dist\BeatGenerator`**, а не только `.exe`.
-## Windows EXE build
+## 📄 License
 
-On Windows run `build_exe.bat`. The script creates `.venv`, installs dependencies including Pillow and PyInstaller, and builds a portable application in `dist\BeatGenerator\BeatGenerator.exe`.
-
-The project icon is a real multi-size Windows `.ico`.
-
-### Sample locks
-
-Each track has a sample lock button next to the sample selector. A locked sample is preserved by **Random Samples**. If a track has no concrete sample selected when locking, one is selected automatically.
-
-**Random Samples** assigns a different random concrete sample to every unlocked track.
-
+MIT
