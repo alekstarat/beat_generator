@@ -2,7 +2,7 @@
 
 Desktop-приложение для генерации и редактирования битов на основе пользовательских sample packs.
 
-![BeatGenerator](https://github-production-user-asset-6210df.s3.amazonaws.com/90523142/655041058-bfdd1e46-3e67-4d17-ad2f-0cc7446f8f04.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20260919%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260919T053044Z&X-Amz-Expires=300&X-Amz-Signature=83c9a4d9eca017e6197eccc01fe2926a3dca7a4dcc7a08a5a9d6c326e66853b4&X-Amz-SignedHeaders=host&response-content-type=image%2Fpng)
+<img width="1900" height="898" alt="Image" src="https://github.com/user-attachments/assets/bfdd1e46-3e67-4d17-ad2f-0cc7446f8f04" />
 
 ## ✨ Возможности
 
