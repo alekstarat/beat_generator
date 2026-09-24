@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QSlider, QSpinBox, QDoubleSpinBox, QComboBox, QFileDialog, QMessageBox,
     QGroupBox, QFormLayout, QProgressBar, QStatusBar, QFrame, QLineEdit,
-    QSizePolicy, QApplication,
+    QSizePolicy, QApplication, QTabWidget,
 )
 
 from core.types import SampleType, Settings, TrackState, Pattern, Event, Sample
@@ -27,6 +27,7 @@ from core.config import get_last_pack, set_last_pack, get_last_settings, set_las
 
 from .sequencer import SequencerWidget
 from .audio_player import AudioPlayer
+from .melody import MelodyWidget
 
 
 class ScanWorker(QThread):
@@ -137,7 +138,14 @@ class MainWindow(QMainWindow):
     def _build_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
-        root = QVBoxLayout(central)
+        central_layout = QVBoxLayout(central)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        self.tabs = QTabWidget()
+        central_layout.addWidget(self.tabs)
+
+        beat_page = QWidget()
+        self.tabs.addTab(beat_page, "🥁 Beat")
+        root = QVBoxLayout(beat_page)
         root.setSpacing(10)
         root.setContentsMargins(12, 12, 12, 8)
 
@@ -271,6 +279,9 @@ class MainWindow(QMainWindow):
         self.sequencer = SequencerWidget()
         seq_layout.addWidget(self.sequencer)
         root.addWidget(seq_box, stretch=1)
+
+        self.melody_page = MelodyWidget(audio_player=self.player)
+        self.tabs.addTab(self.melody_page, "🎹 Melody")
 
         self.setStatusBar(QStatusBar())
 

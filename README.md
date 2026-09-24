@@ -49,3 +49,31 @@ beat-generator/
 ## 📄 License
 
 MIT
+
+
+## 🎹 Melody / Piano Roll
+
+В приложение добавлена отдельная вкладка **Melody** с piano-roll редактором:
+
+- генерация мелодий по тональности и гамме;
+- Major / Minor / Dorian / Pentatonic;
+- 1–8 тактов, сетка 16 или 32 шага на такт;
+- плотность генерации;
+- добавление нот левой кнопкой мыши;
+- перетаскивание нот;
+- удаление правой кнопкой;
+- прослушивание отдельных нот и всей мелодии;
+- экспорт мелодии в MIDI;
+- встроенный синтезатор для предпрослушивания, без дополнительных семплов.
+
+Вкладка работает независимо от барабанного секвенсора и доступна сразу после запуска.
+
+### Melody customization knobs
+
+The Melody tab now includes rotary controls:
+- **Variation** — changes melodic movement and randomness.
+- **Length** — preferred note length from 1 to 4 grid steps.
+- **Velocity** — generated note dynamics.
+- **Register** — shifts the melodic register between octaves 3–6.
+
+Changing a knob regenerates the phrase immediately, so you can quickly audition different combinations.
